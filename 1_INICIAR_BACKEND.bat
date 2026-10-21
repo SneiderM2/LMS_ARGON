@@ -1,6 +1,6 @@
 @echo off
 chcp 65001 >nul
-title SciKids LMS - Servidor Backend ASP.NET Core (Puerto 5000)
+title SciKids LMS - Servidor Backend ASP.NET Core - Puerto 5000
 color 0B
 
 echo ============================================================================
@@ -10,34 +10,38 @@ echo ===========================================================================
 echo.
 
 cd /d "%~dp0backend\LMS.API"
-if %ERRORLEVEL% NEQ 0 (
-    color 0C
-    echo [ERROR] No se encontro el directorio backend\LMS.API.
-    pause
-    exit /b 1
-)
+if errorlevel 1 goto :ERROR_DIR
 
-echo [1/2] Restaurando paquetes NuGet (dotnet restore)...
+echo [1/2] Restaurando paquetes NuGet con dotnet restore...
 dotnet restore
-if %ERRORLEVEL% NEQ 0 (
-    color 0C
-    echo [ERROR] Fallo la restauracion de paquetes NuGet. Verifique que el SDK de .NET 8.0+ este instalado.
-    pause
-    exit /b 1
-)
+if errorlevel 1 goto :ERROR_RESTORE
 
 echo.
 echo [2/2] Compilando e iniciando servidor en http://localhost:5000 ...
 echo       Swagger UI disponible en: http://localhost:5000/swagger
 echo.
 dotnet run --urls "http://localhost:5000"
+if errorlevel 1 goto :ERROR_RUN
+goto :END
 
-if %ERRORLEVEL% NEQ 0 (
-    color 0C
-    echo.
-    echo [ERROR] El servidor Backend se detuvo con errores. Revise la cadena de conexion en appsettings.json.
-    pause
-    exit /b 1
-)
+:ERROR_DIR
+color 0C
+echo [ERROR] No se encontro el directorio backend\LMS.API.
+pause
+exit /b 1
 
+:ERROR_RESTORE
+color 0C
+echo [ERROR] Fallo la restauracion de paquetes NuGet.
+pause
+exit /b 1
+
+:ERROR_RUN
+color 0C
+echo.
+echo [ERROR] El servidor Backend se detuvo con errores.
+pause
+exit /b 1
+
+:END
 pause
