@@ -8,10 +8,83 @@ Plataforma de Gestión del Aprendizaje (LMS) diseñada para **Educación Básica
 
 ---
 
+## Requisitos Previos
+
+1. **.NET 8.0 SDK (o superior):** [Descargar .NET SDK](https://dotnet.microsoft.com/download)
+2. **Node.js 18+ y npm:** [Descargar Node.js](https://nodejs.org/)
+3. **PostgreSQL 15+ (Supabase Cloud o instancia local):** Proyecto activo en [Supabase](https://supabase.com/)
+
+---
+
+## Guía Paso a Paso de Instalación y Ejecución
+
+### Paso 1: Configurar y Migrar la Base de Datos en Supabase (PostgreSQL)
+
+1. Abre el **SQL Editor** de tu proyecto en **Supabase** (o tu cliente `psql` / pgAdmin).
+2. Copia y ejecuta el contenido completo del script:
+   - `scripts/01_security_and_rls_scikids.sql`
+   - Este script crea las tablas en `snake_case`, los triggers de auditoría inmutable (`pii_audit_logs`), la tabla `parental_consents`, las políticas estrictas de **Row Level Security (RLS)** y siembra el catálogo base de Roles y Grados (`1°` a `5° de Primaria`).
+3. Edita el archivo `backend/LMS.API/appsettings.json` y coloca las credenciales de tu proyecto Supabase en `ConnectionStrings:SupabasePostgres`:
+   ```json
+   "ConnectionStrings": {
+     "SupabasePostgres": "Host=aws-0-us-east-1.pooler.supabase.com;Port=5432;Database=postgres;Username=postgres.TU_PROYECTO;Password=TU_PASSWORD;SSL Mode=Require;Trust Server Certificate=true"
+   }
+   ```
+4. Al iniciar el backend con `"RunDatabaseInitializerOnStartup": true`, la clase `DbInitializer.cs` verificará el esquema con Entity Framework Core y sembrará automáticamente los usuarios de demostración, cursos, tareas y el Semáforo Escolar.
+
+---
+
+### Paso 2: Restaurar Paquetes (Manual o Automático)
+
+Si deseas restaurar las dependencias manualmente desde la terminal antes de iniciar:
+
+#### A. Restaurar paquetes NuGet del Backend (.NET)
+```powershell
+cd backend/LMS.API
+dotnet restore
+dotnet build
+```
+
+#### B. Instalar paquetes npm del Frontend (Angular 18)
+```powershell
+cd frontend
+npm install
+```
+
+---
+
+### Paso 3: Ejecución Local con Un Solo Clic (`.bat`)
+
+En la raíz del proyecto encontrarás dos scripts de automatización para Windows:
+
+1. **Doble clic en `1_INICIAR_BACKEND.bat`:**
+   - Navega automáticamente a `backend/LMS.API`.
+   - Ejecuta `dotnet restore` y levanta la Web API en `http://localhost:5000`.
+   - Documentación interactiva Swagger disponible en: `http://localhost:5000/swagger`.
+
+2. **Doble clic en `2_INICIAR_FRONTEND.bat`:**
+   - Navega automáticamente a `frontend/`.
+   - Verifica e instala `node_modules` (`npm install`) si es la primera ejecución.
+   - Levanta el servidor de desarrollo de Angular 18 en `http://localhost:4200` con proxy preconfigurado (`proxy.conf.json`) hacia `http://localhost:5000/api` y abre el navegador automáticamente.
+
+---
+
+## Cuentas Semilla Preconfiguradas (Demo)
+
+| Rol RBAC | Usuario / Correo | Contraseña | Seudónimo / Grado |
+| :--- | :--- | :--- | :--- |
+| **Alumno Explorador** | `mateo.explorador` | `AlumnoSciKids2026!` | `EXPLORADOR-3001` (3° Primaria) |
+| **Docente Titular** | `profe.laura` | `DocenteSciKids2026!` | Ciencias Naturales (3° Primaria) |
+| **Administrador** | `admin.scikids` | `AdminSciKids2026!` | Coordinación Institucional |
+
+---
+
 ## Estructura del Repositorio
 
 ```text
 LMS_ARGON/
+├── 1_INICIAR_BACKEND.bat                   # Lanzador de 1 clic para el Backend ASP.NET Core (Puerto 5000)
+├── 2_INICIAR_FRONTEND.bat                  # Lanzador de 1 clic para el Frontend Angular 18 (Puerto 4200)
 ├── backend/
 │   └── LMS.API/
 │       ├── Controllers/
@@ -53,6 +126,9 @@ LMS_ARGON/
 │       ├── appsettings.json
 │       └── LMS.API.csproj
 ├── frontend/
+│   ├── angular.json
+│   ├── package.json
+│   ├── proxy.conf.json
 │   └── src/app/
 │       ├── core/
 │       │   ├── interceptors/
