@@ -4,7 +4,7 @@ using Microsoft.AspNetCore.Http;
 namespace LMS.API.Middleware;
 
 /// <summary>
-/// Middleware Enterprise de Cabeceras HTTP de Seguridad (OWASP ASVS Nivel 2 & Lineamientos MEN para AVA).
+/// Middleware Enterprise de Cabeceras HTTP de Seguridad (OWASP ASVS Nivel 2 y Lineamientos MEN para AVA).
 /// Protege contra ataques XSS, Clickjacking, MIME-Sniffing, degradación de protocolo TLS y filtración de cabeceras del servidor.
 /// </summary>
 public sealed class SecurityHeadersMiddleware

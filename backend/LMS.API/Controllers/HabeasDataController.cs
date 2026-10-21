@@ -184,7 +184,7 @@ public sealed class HabeasDataController : ControllerBase
     }
 
     /// <summary>
-    /// [Autorización Previa, Expresa e Informada - Art. 12 Ley 1581 de 2012 & Decreto 1377 de 2013]
+    /// [Autorización Previa, Expresa e Informada - Art. 12 Ley 1581 de 2012 y Decreto 1377 de 2013]
     /// Registra el consentimiento informado del padre de familia o acudiente para habilitar el uso pedagógico de la plataforma.
     /// </summary>
     [HttpPost("consent/grant")]
@@ -238,7 +238,7 @@ public sealed class HabeasDataController : ControllerBase
     }
 
     /// <summary>
-    /// [Revocatoria del Consentimiento - Art. 8 Literal e) Ley 1581 de 2012 & Art. 9 Decreto 1377 de 2013]
+    /// [Revocatoria del Consentimiento - Art. 8 Literal e) Ley 1581 de 2012 y Art. 9 Decreto 1377 de 2013]
     /// Revoca de forma inmediata la autorización de tratamiento de datos del menor y termina todas sus sesiones activas.
     /// </summary>
     [HttpPost("consent/revoke")]
@@ -292,7 +292,7 @@ public sealed class HabeasDataController : ControllerBase
     }
 
     /// <summary>
-    /// [Derecho de Supresión y Olvido Digital - Art. 15 Ley 1581 de 2012 & Art. 47 Ley 1098 de 2006]
+    /// [Derecho de Supresión y Olvido Digital - Art. 15 Ley 1581 de 2012 y Art. 47 Ley 1098 de 2006]
     /// Ejecuta la supresión criptográfica de la Información Personalmente Identificable (PII) del menor,
     /// conservando únicamente registros estadísticos seudonimizados y el acta forense de supresión.
     /// </summary>

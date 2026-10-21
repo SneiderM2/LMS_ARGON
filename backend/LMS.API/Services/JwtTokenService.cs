@@ -64,8 +64,11 @@ public sealed class JwtTokenService : IJwtTokenService
 
         // Bloqueo normativo Ley 1098 de 2006 (Arts. 44/47) y Ley 1581 de 2012 (Art. 12):
         // Ningún estudiante menor de edad puede obtener tokens activos sin consentimiento parental verificado.
-        if (userContext.Role.Equals("ESTUDIANTE", StringComparison.OrdinalIgnoreCase) &&
-            !userContext.HasActiveParentalConsent)
+        bool isMinorStudentRole =
+            userContext.Role.Equals("ALUMNO", StringComparison.OrdinalIgnoreCase) ||
+            userContext.Role.Equals("ESTUDIANTE", StringComparison.OrdinalIgnoreCase);
+
+        if (isMinorStudentRole && !userContext.HasActiveParentalConsent)
         {
             _logger.LogWarning(
                 "Emisión de token denegada para el estudiante {UserId}: No cuenta con consentimiento parental activo.",

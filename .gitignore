@@ -1,0 +1,19 @@
+# .NET Build Artifacts
+bin/
+obj/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+App_Data/
+
+# Angular / Node Artifacts
+node_modules/
+dist/
+.angular/
+coverage/
+
+# Environment & Secrets
+.env
+.env.*
+appsettings.Local.json

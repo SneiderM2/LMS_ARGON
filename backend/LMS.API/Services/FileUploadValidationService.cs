@@ -5,47 +5,8 @@ using Microsoft.Extensions.Logging;
 namespace LMS.API.Services;
 
 /// <summary>
-/// Resultado inmutable del pipeline de validación y sanitización de evidencias escolares.
-/// </summary>
-public sealed record FileUploadValidationResult(
-    bool IsValid,
-    string? ErrorCode,
-    string? ErrorMessage,
-    string SanitizedFileName,
-    string VerifiedMimeType,
-    string Sha256Checksum,
-    long FileSizeBytes
-)
-{
-    public static FileUploadValidationResult Failure(string errorCode, string errorMessage) =>
-        new(
-            IsValid: false,
-            ErrorCode: errorCode,
-            ErrorMessage: errorMessage,
-            SanitizedFileName: string.Empty,
-            VerifiedMimeType: string.Empty,
-            Sha256Checksum: string.Empty,
-            FileSizeBytes: 0);
-}
-
-public interface IFileUploadValidationService
-{
-    /// <summary>
-    /// Valida un archivo subido verificando tamaño máximo, extensión en lista blanca, firma binaria (Magic Bytes),
-    /// ausencia de scripts maliciosos embebidos y genera un nombre seguro basado en GUID contra Path Traversal.
-    /// </summary>
-    Task<FileUploadValidationResult> ValidateAndSanitizeAsync(
-        IFormFile? file,
-        CancellationToken cancellationToken = default);
-
-    /// <summary>
-    /// Construye una ruta de objeto aislada para Supabase Storage sin emplear ningún carácter provisto por el usuario.
-    /// </summary>
-    string BuildSafeStorageObjectPath(Guid tenantId, Guid activityId, Guid studentId, string sanitizedFileName);
-}
-
-/// <summary>
 /// Servicio DevSecOps de validación multicapa para subida de archivos/evidencias escolares en SciKids LMS.
+/// Verifica firmas binarias (Magic Bytes), lista blanca de extensiones y renombrado GUID anti-Path Traversal.
 /// </summary>
 public sealed class FileUploadValidationService : IFileUploadValidationService
 {
@@ -156,7 +117,7 @@ public sealed class FileUploadValidationService : IFileUploadValidationService
 
         await using Stream fileStream = file.OpenReadStream();
 
-        // 3. Inspección de Magic Bytes (verificación criptográfica/binaria de cabecera)
+        // 3. Inspección de Magic Bytes (verificación binaria de cabecera)
         int maxMagicLength = formatSpec.MagicSignatures.Max(sig => sig.Length);
         byte[] headerBytes = new byte[maxMagicLength];
         int bytesRead = await fileStream.ReadAsync(headerBytes.AsMemory(0, maxMagicLength), cancellationToken);
@@ -181,31 +142,16 @@ public sealed class FileUploadValidationService : IFileUploadValidationService
         using var memoryBuffer = new MemoryStream((int)file.Length);
         await fileStream.CopyToAsync(memoryBuffer, cancellationToken);
 
-        ReadOnlySpan<byte> payloadSpan = memoryBuffer.GetBuffer().AsSpan(0, (int)memoryBuffer.Length);
+        (bool isCleanPayload, string? threatCode, string? threatMessage, string sha256Hex) =
+            InspectPayloadAndComputeSha256(
+                memoryBuffer.GetBuffer(),
+                (int)memoryBuffer.Length,
+                formatSpec.CanonicalExtension);
 
-        if (payloadSpan.IndexOf(EicarTestSignature) >= 0)
+        if (!isCleanPayload)
         {
-            _logger.LogCritical("Firma antimalware EICAR detectada en subida de archivo.");
-            return FileUploadValidationResult.Failure(
-                "MALWARE_SIGNATURE_DETECTED",
-                "El archivo fue bloqueado por contener una firma de código malicioso.");
+            return FileUploadValidationResult.Failure(threatCode!, threatMessage!);
         }
-
-        if (formatSpec.CanonicalExtension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
-        {
-            if (payloadSpan.IndexOf(DangerousPdfJsToken) >= 0 ||
-                payloadSpan.IndexOf(DangerousPdfLaunchToken) >= 0 ||
-                payloadSpan.IndexOf(DangerousPdfOpenActionToken) >= 0)
-            {
-                _logger.LogWarning("PDF bloqueado por contener acciones ejecutables o JavaScript embebido.");
-                return FileUploadValidationResult.Failure(
-                    "PDF_ACTIVE_CONTENT_FORBIDDEN",
-                    "No se permiten archivos PDF con scripts o acciones automáticas embebidas.");
-            }
-        }
-
-        byte[] sha256Bytes = SHA256.HashData(payloadSpan);
-        string sha256Hex = Convert.ToHexString(sha256Bytes);
 
         // 5. Renombrado seguro con GUID v4 para erradicar por completo Path Traversal y colisiones
         string sanitizedFileName = $"{Guid.NewGuid():N}{formatSpec.CanonicalExtension}";
@@ -214,24 +160,64 @@ public sealed class FileUploadValidationService : IFileUploadValidationService
             IsValid: true,
             ErrorCode: null,
             ErrorMessage: null,
+            OriginalFileNameSanitized: safeLeafName,
             SanitizedFileName: sanitizedFileName,
+            Extension: formatSpec.CanonicalExtension,
             VerifiedMimeType: formatSpec.MimeType,
             Sha256Checksum: sha256Hex,
             FileSizeBytes: file.Length);
     }
 
+    private (bool IsClean, string? ErrorCode, string? ErrorMessage, string Sha256Hex) InspectPayloadAndComputeSha256(
+        byte[] rawBuffer,
+        int length,
+        string canonicalExtension)
+    {
+        ReadOnlySpan<byte> payloadSpan = rawBuffer.AsSpan(0, length);
+
+        if (payloadSpan.IndexOf(EicarTestSignature) >= 0)
+        {
+            _logger.LogCritical("Firma antimalware EICAR detectada en subida de archivo.");
+            return (
+                false,
+                "MALWARE_SIGNATURE_DETECTED",
+                "El archivo fue bloqueado por contener una firma de código malicioso.",
+                string.Empty);
+        }
+
+        if (canonicalExtension.Equals(".pdf", StringComparison.OrdinalIgnoreCase))
+        {
+            if (payloadSpan.IndexOf(DangerousPdfJsToken) >= 0 ||
+                payloadSpan.IndexOf(DangerousPdfLaunchToken) >= 0 ||
+                payloadSpan.IndexOf(DangerousPdfOpenActionToken) >= 0)
+            {
+                _logger.LogWarning("PDF bloqueado por contener acciones ejecutables o JavaScript embebido.");
+                return (
+                    false,
+                    "PDF_ACTIVE_CONTENT_FORBIDDEN",
+                    "No se permiten archivos PDF con scripts o acciones automáticas embebidas.",
+                    string.Empty);
+            }
+        }
+
+        byte[] sha256Bytes = SHA256.HashData(payloadSpan);
+        string sha256Hex = Convert.ToHexString(sha256Bytes);
+
+        return (true, null, null, sha256Hex);
+    }
+
     public string BuildSafeStorageObjectPath(
-        Guid tenantId,
-        Guid activityId,
-        Guid studentId,
+        Guid cursoId,
+        Guid tareaId,
+        Guid alumnoId,
         string sanitizedFileName)
     {
-        if (tenantId == Guid.Empty || activityId == Guid.Empty || studentId == Guid.Empty)
+        if (cursoId == Guid.Empty || tareaId == Guid.Empty || alumnoId == Guid.Empty)
         {
-            throw new ArgumentException("Los identificadores de Tenant, Actividad y Estudiante deben ser GUIDs válidos.");
+            throw new ArgumentException("Los identificadores de Curso, Tarea y Alumno deben ser GUIDs válidos.");
         }
 
         string cleanFileName = Path.GetFileName(sanitizedFileName);
-        return $"tenants/{tenantId:N}/activities/{activityId:N}/students/{studentId:N}/{cleanFileName}";
+        return $"cursos/{cursoId:N}/tareas/{tareaId:N}/alumnos/{alumnoId:N}/{cleanFileName}";
     }
 }

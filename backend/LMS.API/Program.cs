@@ -3,19 +3,37 @@ using System.Security.Claims;
 using System.Text;
 using System.Threading.RateLimiting;
 using LMS.API.Controllers;
+using LMS.API.Data;
 using LMS.API.Middleware;
 using LMS.API.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Configuración y registro de servicios de seguridad (JWT, Archivos Magic Bytes, Habeas Data)
+// 1. Registro de LMSDbContext con Npgsql (PostgreSQL en Supabase)
+string connectionString = builder.Configuration.GetConnectionString("SupabasePostgres")
+    ?? throw new InvalidOperationException("No se encontró la cadena de conexión 'SupabasePostgres'.");
+
+builder.Services.AddDbContext<LMSDbContext>(options =>
+{
+    options.UseNpgsql(connectionString, npgsqlOptions =>
+    {
+        npgsqlOptions.EnableRetryOnFailure(
+            maxRetryCount: 3,
+            maxRetryDelay: TimeSpan.FromSeconds(5),
+            errorCodesToAdd: null);
+    });
+});
+
+// 2. Configuración y registro de servicios de seguridad (JWT, Magic Bytes, Habeas Data)
 builder.Services.Configure<JwtSecurityOptions>(
     builder.Configuration.GetSection(JwtSecurityOptions.SectionName));
 
@@ -24,7 +42,7 @@ builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IFileUploadValidationService, FileUploadValidationService>();
 builder.Services.AddScoped<IHabeasDataComplianceService, HabeasDataComplianceService>();
 
-// 2. Configuración de Rate Limiting mediante Token Bucket por frontera (IP + UserId)
+// 3. Configuración de Rate Limiting mediante Token Bucket por frontera (IP + UserId)
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -61,14 +79,14 @@ builder.Services.AddRateLimiter(options =>
     });
 });
 
-// 3. Autenticación JWT con verificación en lista de revocación distribuida
+// 4. Autenticación JWT con verificación en lista de revocación distribuida
 JwtSecurityOptions jwtOptions = builder.Configuration
     .GetSection(JwtSecurityOptions.SectionName)
     .Get<JwtSecurityOptions>() ?? new JwtSecurityOptions
 {
     Issuer = "https://scikids-api.onrender.com",
-    Audience = "https://scikids-lms.github.io",
-    SecretKey = "CHANGE_THIS_IN_PRODUCTION_WITH_MINIMUM_32_BYTES_SECRET_KEY_2026!"
+    Audience = "https://sneiderm2.github.io",
+    SecretKey = "SCIKIDS_ENTERPRISE_256BIT_SECRET_KEY_COLOMBIA_LEY1581_2026!"
 };
 
 builder.Services
@@ -109,18 +127,50 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
+
+// 5. CORS estricto con credenciales habilitadas para cookies HttpOnly
+string[] allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
+    ?? new[] { "http://localhost:4200", "https://sneiderm2.github.io" };
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("SciKidsSpaCors", policy =>
+    {
+        policy.WithOrigins(allowedOrigins)
+              .AllowCredentials()
+              .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE")
+              .WithHeaders("Authorization", "Content-Type", "X-Requested-With");
+    });
+});
+
 builder.Services.AddControllers();
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// 4. Pipeline de Middlewares DevSecOps (Cabeceras -> Excepciones RFC 7807 -> HTTPS -> Auth -> RateLimiting)
+// 6. Pipeline de Middlewares DevSecOps (Cabeceras -> Excepciones RFC 7807 -> HTTPS -> CORS -> Auth -> RateLimiting)
 app.UseSciKidsSecurityHeaders();
 app.UseSciKidsGlobalExceptionHandler();
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
+
 app.UseHttpsRedirection();
+app.UseCors("SciKidsSpaCors");
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Inicialización y Seeding automático cuando hay conexión activa a base de datos
+if (app.Configuration.GetValue("RunDatabaseInitializerOnStartup", false))
+{
+    await DbInitializer.InitializeAndSeedAsync(app.Services);
+}
 
 app.Run();
