@@ -24,11 +24,26 @@ import {
   timer,
 } from 'rxjs';
 
+export type UserRoleType = 'ADMINISTRADOR' | 'DOCENTE' | 'ALUMNO' | 'ACUDIENTE';
+
 export type LogoutReason =
   | 'INACTIVITY_TIMEOUT'
   | 'TOKEN_REFRESH_FAILED'
   | 'FORBIDDEN_PARENTAL_CONSENT'
   | 'USER_LOGOUT';
+
+export interface ActiveUserSession {
+  readonly usuarioId: string;
+  readonly username: string;
+  readonly email: string;
+  readonly nombreCompleto: string;
+  readonly rol: UserRoleType;
+  readonly codigoSeudonimo: string;
+  readonly consentimientoParentalVerificado: boolean;
+  readonly accessToken: string;
+  readonly accessTokenExpiresAtUtc: string;
+  readonly sessionFamilyId: string;
+}
 
 interface CrossTabSyncMessage {
   type: 'ACTIVITY_PING' | 'FORCE_LOGOUT';
@@ -38,8 +53,8 @@ interface CrossTabSyncMessage {
 
 /**
  * Servicio Enterprise de Monitoreo de Inactividad y Custodia de Sesión en Memoria RAM.
- * Protege los perfiles de niños de primaria (Ley 1098 de 2006 / Ley 1581 de 2012) cerrando
- * automáticamente sesiones desatendidas en equipos escolares o familiares compartidos.
+ * Protege los perfiles de niños de primaria (Ley 1098 de 2006 y Ley 1581 de 2012) cerrando
+ * automáticamente sesiones desatendidas al detectar ausencia de eventos de mouse, teclado o pantalla táctil.
  */
 @Injectable({
   providedIn: 'root',
@@ -50,7 +65,7 @@ export class InactivityService {
   private readonly http = inject(HttpClient);
   private readonly router = inject(Router);
 
-  /** Umbral de inactividad antes de mostrar advertencia: 10 minutos */
+  /** Umbral de inactividad antes de mostrar advertencia: 10 minutos (600,000 ms) */
   private readonly IDLE_TIMEOUT_MS = 10 * 60 * 1000;
 
   /** Tiempo de cuenta regresiva visual antes del cierre forzado: 60 segundos */
@@ -59,12 +74,14 @@ export class InactivityService {
   /** Endpoint de revocación de sesión en el backend ASP.NET Core */
   private readonly LOGOUT_ENDPOINT = '/api/v1/auth/logout';
 
-  /** Token de acceso almacenado exclusivamente en memoria volátil (RAM) para mitigar robo por XSS */
+  /** Estado reactivo en memoria volátil (RAM) para mitigar exfiltración de JWT vía XSS */
+  private readonly _currentSession = signal<ActiveUserSession | null>(null);
   private readonly _inMemoryAccessToken = signal<string | null>(null);
   private readonly _isSessionActive = signal<boolean>(false);
   private readonly _isWarningVisible = signal<boolean>(false);
   private readonly _remainingSeconds = signal<number>(this.GRACE_COUNTDOWN_SECONDS);
 
+  public readonly currentSession = computed(() => this._currentSession());
   public readonly accessToken = computed(() => this._inMemoryAccessToken());
   public readonly isSessionActive = computed(() => this._isSessionActive());
   public readonly isWarningVisible = computed(() => this._isWarningVisible());
@@ -87,11 +104,29 @@ export class InactivityService {
   }
 
   /**
-   * Registra el Access Token JWT en memoria RAM e inicia el monitoreo de actividad.
+   * Establece la sesión autenticada completa en memoria RAM e inicia el guardián de inactividad.
    */
-  public setAccessToken(token: string): void {
+  public setAuthenticatedSession(session: ActiveUserSession): void {
+    this._currentSession.set(session);
+    this._inMemoryAccessToken.set(session.accessToken);
+    this._isSessionActive.set(true);
+  }
+
+  /**
+   * Actualiza el Access Token JWT en memoria RAM (utilizado tras un Silent Refresh exitoso).
+   */
+  public setAccessToken(token: string, expiresAtUtc?: string): void {
     this._inMemoryAccessToken.set(token);
     this._isSessionActive.set(true);
+
+    const existing = this._currentSession();
+    if (existing) {
+      this._currentSession.set({
+        ...existing,
+        accessToken: token,
+        accessTokenExpiresAtUtc: expiresAtUtc ?? existing.accessTokenExpiresAtUtc,
+      });
+    }
   }
 
   /**
@@ -102,7 +137,7 @@ export class InactivityService {
   }
 
   /**
-   * Reinicia el temporizador de inactividad cuando el usuario confirma que sigue presente.
+   * Reinicia el temporizador de inactividad cuando el usuario confirma que sigue activo.
    */
   public extendActiveSession(): void {
     this.countdownSubscription?.unsubscribe();
@@ -113,7 +148,7 @@ export class InactivityService {
   }
 
   /**
-   * Inicia la escucha de eventos de hardware (mouse, teclado, touch) fuera de la zona de Angular
+   * Inicia la escucha de eventos de hardware (mouse, teclado, touch, scroll) fuera de la zona de Angular
    * para evitar ciclos innecesarios de Change Detection y fugas de memoria.
    */
   public startInactivityMonitoring(): void {
@@ -181,7 +216,7 @@ export class InactivityService {
         catchError(() => of(null)),
         finalize(() => {
           this.clearSensitiveStorage();
-          void this.router.navigate(['/auth/login'], {
+          void this.router.navigate(['/login'], {
             queryParams: { reason },
             replaceUrl: true,
           });
@@ -194,6 +229,7 @@ export class InactivityService {
    * Purga de forma inmediata cualquier credencial o estado sensible en el navegador.
    */
   public clearSensitiveStorage(): void {
+    this._currentSession.set(null);
     this._inMemoryAccessToken.set(null);
     this._isSessionActive.set(false);
     this._isWarningVisible.set(false);

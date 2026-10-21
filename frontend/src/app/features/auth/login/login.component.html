@@ -1,0 +1,490 @@
+<main
+  class="min-h-screen px-4 py-8 transition-colors duration-200 md:px-8"
+  [ngClass]="
+    highContrastMode()
+      ? 'bg-black text-yellow-300'
+      : 'bg-gradient-to-br from-sky-100 via-indigo-50 to-emerald-100 text-slate-900'
+  "
+>
+  <div class="mx-auto max-w-5xl">
+    <!-- Barra Superior de Accesibilidad (NTC 5854 / WCAG 2.1 AA) -->
+    <header
+      class="mb-6 flex flex-col items-start justify-between gap-4 rounded-3xl border-4 p-5 shadow-md sm:flex-row sm:items-center"
+      [ngClass]="
+        highContrastMode()
+          ? 'border-yellow-400 bg-neutral-950'
+          : 'border-sky-300 bg-white'
+      "
+    >
+      <div class="flex items-center gap-3">
+        <span
+          class="flex h-14 w-14 items-center justify-center rounded-2xl bg-sky-600 text-3xl text-white shadow"
+          aria-hidden="true"
+        >
+          🔬
+        </span>
+        <div>
+          <h1 class="text-2xl font-black tracking-tight md:text-3xl">
+            SciKids LMS Colombia
+          </h1>
+          <p class="text-sm font-semibold opacity-90">
+            Plataforma Segura para Educación Primaria (Ley 1581 de 2012 y Ley 1098 de 2006)
+          </p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        (click)="toggleHighContrast()"
+        [attr.aria-pressed]="highContrastMode()"
+        class="min-h-[48px] rounded-2xl border-2 px-5 py-2.5 text-sm font-extrabold shadow transition focus:outline-none focus:ring-4"
+        [ngClass]="
+          highContrastMode()
+            ? 'border-white bg-yellow-400 text-black focus:ring-white'
+            : 'border-slate-900 bg-slate-900 text-yellow-300 hover:bg-slate-800 focus:ring-sky-400'
+        "
+      >
+        👁️ Alto Contraste (NTC 5854): {{ highContrastMode() ? 'ACTIVO' : 'NORMAL' }}
+      </button>
+    </header>
+
+    <!-- Mensajes de Alerta / Estado (ARIA Live) -->
+    @if (errorMessage()) {
+      <div
+        role="alert"
+        aria-live="assertive"
+        class="mb-6 flex items-center gap-3 rounded-2xl border-4 border-rose-600 bg-rose-50 p-4 font-bold text-rose-950 shadow"
+      >
+        <span class="text-2xl" aria-hidden="true">⚠️</span>
+        <span>{{ errorMessage() }}</span>
+      </div>
+    }
+
+    @if (successMessage()) {
+      <div
+        role="status"
+        aria-live="polite"
+        class="mb-6 flex items-center gap-3 rounded-2xl border-4 border-emerald-600 bg-emerald-50 p-4 font-bold text-emerald-950 shadow"
+      >
+        <span class="text-2xl" aria-hidden="true">✅</span>
+        <span>{{ successMessage() }}</span>
+      </div>
+    }
+
+    <div class="grid grid-cols-1 gap-8 lg:grid-cols-12">
+      <!-- Columna Izquierda: Selector de Perfil RBAC y Accesos Rápidos de Demostración -->
+      <section
+        class="flex flex-col justify-between rounded-3xl border-4 p-6 shadow-xl lg:col-span-5"
+        [ngClass]="
+          highContrastMode()
+            ? 'border-yellow-400 bg-neutral-900'
+            : 'border-sky-300 bg-white'
+        "
+        aria-labelledby="profile-selector-heading"
+      >
+        <div>
+          <h2 id="profile-selector-heading" class="text-xl font-black">
+            1. Elige tu Perfil en SciKids
+          </h2>
+          <p class="mt-1 text-sm font-medium opacity-85">
+            Selecciona quién eres para adaptar la interfaz y los controles de seguridad:
+          </p>
+
+          <div
+            class="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-1"
+            role="radiogroup"
+            aria-label="Selección de rol de usuario"
+          >
+            @for (card of roleCards; track card.codigo) {
+              <button
+                type="button"
+                role="radio"
+                [attr.aria-checked]="selectedRole() === card.codigo"
+                (click)="selectRoleProfile(card.codigo)"
+                class="flex min-h-[64px] w-full items-center gap-4 rounded-2xl border-4 p-3.5 text-left transition focus:outline-none focus:ring-4"
+                [ngClass]="
+                  selectedRole() === card.codigo
+                    ? highContrastMode()
+                      ? 'border-white bg-yellow-400 text-black'
+                      : card.badgeColor + ' ring-4 ring-sky-300'
+                    : highContrastMode()
+                      ? 'border-yellow-500/50 bg-black text-yellow-200'
+                      : 'border-slate-200 bg-slate-50 text-slate-800 hover:border-sky-300'
+                "
+              >
+                <span class="text-3xl" aria-hidden="true">{{ card.icono }}</span>
+                <div>
+                  <div class="text-base font-extrabold">{{ card.titulo }}</div>
+                  <div class="text-xs font-semibold opacity-85">{{ card.subtitulo }}</div>
+                </div>
+              </button>
+            }
+          </div>
+        </div>
+
+        <!-- Credenciales de Prueba Preconfiguradas (Seeded en DbInitializer) -->
+        <div
+          class="mt-6 rounded-2xl border-2 border-dashed p-4"
+          [ngClass]="
+            highContrastMode()
+              ? 'border-yellow-400 bg-black'
+              : 'border-sky-300 bg-sky-50/70'
+          "
+        >
+          <p class="text-xs font-extrabold uppercase tracking-wider">
+            ⚡ Autocompletar Cuenta Semilla (Demo):
+          </p>
+          <div class="mt-2.5 flex flex-wrap gap-2">
+            <button
+              type="button"
+              (click)="fillDemoCredentials('ALUMNO')"
+              class="min-h-[44px] rounded-xl bg-sky-600 px-3 py-2 text-xs font-bold text-white shadow hover:bg-sky-700 focus:outline-none focus:ring-2 focus:ring-sky-400"
+            >
+              🚀 Alumno (3° Primaria)
+            </button>
+            <button
+              type="button"
+              (click)="fillDemoCredentials('DOCENTE')"
+              class="min-h-[44px] rounded-xl bg-emerald-600 px-3 py-2 text-xs font-bold text-white shadow hover:bg-emerald-700 focus:outline-none focus:ring-2 focus:ring-emerald-400"
+            >
+              👩‍🏫 Docente Titular
+            </button>
+            <button
+              type="button"
+              (click)="fillDemoCredentials('ADMINISTRADOR')"
+              class="min-h-[44px] rounded-xl bg-indigo-600 px-3 py-2 text-xs font-bold text-white shadow hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-400"
+            >
+              ⚙️ Administrador
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- Columna Derecha: Formularios Reactivos de Login y Registro -->
+      <section
+        class="rounded-3xl border-4 p-6 shadow-xl md:p-8 lg:col-span-7"
+        [ngClass]="
+          highContrastMode()
+            ? 'border-yellow-400 bg-neutral-900'
+            : 'border-sky-300 bg-white'
+        "
+      >
+        <!-- Pestañas Login / Registro -->
+        <div
+          class="mb-6 grid grid-cols-2 gap-3 rounded-2xl p-1.5"
+          [ngClass]="highContrastMode() ? 'bg-black' : 'bg-slate-100'"
+          role="tablist"
+        >
+          <button
+            type="button"
+            role="tab"
+            [attr.aria-selected]="activeTab() === 'LOGIN'"
+            (click)="switchTab('LOGIN')"
+            class="min-h-[48px] rounded-xl py-2.5 text-base font-black transition focus:outline-none focus:ring-4"
+            [ngClass]="
+              activeTab() === 'LOGIN'
+                ? highContrastMode()
+                  ? 'bg-yellow-400 text-black'
+                  : 'bg-sky-600 text-white shadow'
+                : ' opacity-75 hover:opacity-100'
+            "
+          >
+            🔑 Iniciar Sesión
+          </button>
+
+          <button
+            type="button"
+            role="tab"
+            [attr.aria-selected]="activeTab() === 'REGISTER'"
+            (click)="switchTab('REGISTER')"
+            class="min-h-[48px] rounded-xl py-2.5 text-base font-black transition focus:outline-none focus:ring-4"
+            [ngClass]="
+              activeTab() === 'REGISTER'
+                ? highContrastMode()
+                  ? 'bg-yellow-400 text-black'
+                  : 'bg-emerald-600 text-white shadow'
+                : 'opacity-75 hover:opacity-100'
+            "
+          >
+            📝 Crear Cuenta Segura
+          </button>
+        </div>
+
+        <!-- ================================================================= -->
+        <!-- FORMULARIO REACTIVO 1: INICIAR SESIÓN CON CAPTCHA ACCESIBLE       -->
+        <!-- ================================================================= -->
+        @if (activeTab() === 'LOGIN') {
+          <form [formGroup]="loginForm" (ngSubmit)="onSubmitLogin()" novalidate class="space-y-5">
+            <div>
+              <label for="login-username" class="block text-base font-extrabold">
+                Usuario o Correo Electrónico
+              </label>
+              <input
+                id="login-username"
+                type="text"
+                formControlName="usernameOrEmail"
+                autocomplete="username"
+                placeholder="Ej: mateo.explorador o profe.laura"
+                class="mt-1.5 w-full min-h-[52px] rounded-2xl border-2 px-4 py-3 text-base font-semibold text-slate-900 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-300"
+              />
+            </div>
+
+            <div>
+              <label for="login-password" class="block text-base font-extrabold">
+                Contraseña Secreta
+              </label>
+              <div class="relative mt-1.5 flex items-center">
+                <input
+                  id="login-password"
+                  [type]="showPassword() ? 'text' : 'password'"
+                  formControlName="password"
+                  autocomplete="current-password"
+                  placeholder="Ingresa tu contraseña segura"
+                  class="w-full min-h-[52px] rounded-2xl border-2 px-4 py-3 pr-24 text-base font-semibold text-slate-900 focus:border-sky-600 focus:outline-none focus:ring-4 focus:ring-sky-300"
+                />
+                <button
+                  type="button"
+                  (click)="toggleShowPassword()"
+                  class="absolute right-2 min-h-[40px] rounded-xl bg-slate-200 px-3 py-1.5 text-xs font-extrabold text-slate-900 hover:bg-slate-300"
+                >
+                  {{ showPassword() ? 'Ocultar' : 'Mostrar' }}
+                </button>
+              </div>
+            </div>
+
+            <!-- Bloque de Captcha Matemático y Sonoro Accesible (WCAG 2.1 AA) -->
+            <div
+              class="rounded-2xl border-4 p-4"
+              [ngClass]="
+                highContrastMode()
+                  ? 'border-yellow-400 bg-black'
+                  : 'border-amber-400 bg-amber-50'
+              "
+            >
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <span class="text-sm font-black uppercase tracking-wide">
+                  🧩 Reto Anti-Robots para Exploradores
+                </span>
+                <div class="flex gap-2">
+                  <button
+                    type="button"
+                    (click)="speakCaptchaAudioHint()"
+                    class="min-h-[44px] rounded-xl border-2 border-slate-800 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-900 shadow hover:bg-slate-100"
+                    aria-label="Escuchar reto matemático en voz alta"
+                  >
+                    🔈 Escuchar Pregunta
+                  </button>
+                  <button
+                    type="button"
+                    (click)="refreshCaptchaChallenge()"
+                    class="min-h-[44px] rounded-xl border-2 border-slate-800 bg-white px-3 py-1.5 text-xs font-extrabold text-slate-900 shadow hover:bg-slate-100"
+                    aria-label="Generar otra suma"
+                  >
+                    🔄 Otra Suma
+                  </button>
+                </div>
+              </div>
+
+              <div class="mt-3 flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+                <div
+                  class="flex min-h-[54px] items-center justify-center rounded-2xl border-2 border-amber-600 bg-white px-5 py-2 text-2xl font-black text-slate-950"
+                >
+                  {{ captchaChallenge().questionText }}
+                </div>
+
+                <div class="flex-1 w-full">
+                  <label for="captcha-answer" class="sr-only">Respuesta del Captcha</label>
+                  <input
+                    id="captcha-answer"
+                    type="number"
+                    formControlName="captchaAnswer"
+                    placeholder="Escribe el resultado aquí"
+                    class="w-full min-h-[54px] rounded-2xl border-2 px-4 py-2.5 text-xl font-black text-slate-900 focus:border-amber-600 focus:outline-none focus:ring-4 focus:ring-amber-300"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <button
+              type="submit"
+              [disabled]="isLoading()"
+              class="w-full min-h-[58px] rounded-2xl bg-sky-600 px-6 py-4 text-lg font-black text-white shadow-lg transition hover:bg-sky-700 focus:outline-none focus:ring-4 focus:ring-sky-300 disabled:opacity-50"
+            >
+              {{ isLoading() ? 'Verificando seguridad...' : '🚀 Entrar a SciKids LMS' }}
+            </button>
+          </form>
+        }
+
+        <!-- ================================================================= -->
+        <!-- FORMULARIO REACTIVO 2: REGISTRO CON CUMPLIMIENTO LEY 1581 / 1098  -->
+        <!-- ================================================================= -->
+        @if (activeTab() === 'REGISTER') {
+          <form [formGroup]="registerForm" (ngSubmit)="onSubmitRegister()" novalidate class="space-y-4">
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label for="reg-nombres" class="block text-sm font-extrabold">Nombres</label>
+                <input
+                  id="reg-nombres"
+                  type="text"
+                  formControlName="nombres"
+                  class="mt-1 w-full min-h-[48px] rounded-xl border-2 px-3.5 py-2 font-semibold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label for="reg-apellidos" class="block text-sm font-extrabold">Apellidos</label>
+                <input
+                  id="reg-apellidos"
+                  type="text"
+                  formControlName="apellidos"
+                  class="mt-1 w-full min-h-[48px] rounded-xl border-2 px-3.5 py-2 font-semibold text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label for="reg-username" class="block text-sm font-extrabold">Nombre de Usuario</label>
+                <input
+                  id="reg-username"
+                  type="text"
+                  formControlName="username"
+                  placeholder="ej: valentina.exploradora"
+                  class="mt-1 w-full min-h-[48px] rounded-xl border-2 px-3.5 py-2 font-semibold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label for="reg-doc" class="block text-sm font-extrabold">
+                  Documento (TI / NUIP / CC - Se cifrará con AES-256)
+                </label>
+                <input
+                  id="reg-doc"
+                  type="text"
+                  formControlName="documentoIdentidad"
+                  class="mt-1 w-full min-h-[48px] rounded-xl border-2 px-3.5 py-2 font-semibold text-slate-900"
+                />
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label for="reg-email" class="block text-sm font-extrabold">Correo Electrónico</label>
+                <input
+                  id="reg-email"
+                  type="email"
+                  formControlName="email"
+                  class="mt-1 w-full min-h-[48px] rounded-xl border-2 px-3.5 py-2 font-semibold text-slate-900"
+                />
+              </div>
+
+              <div>
+                <label for="reg-pass" class="block text-sm font-extrabold">Contraseña (mín. 8 caracteres)</label>
+                <input
+                  id="reg-pass"
+                  type="password"
+                  formControlName="password"
+                  class="mt-1 w-full min-h-[48px] rounded-xl border-2 px-3.5 py-2 font-semibold text-slate-900"
+                />
+              </div>
+            </div>
+
+            <!-- Sección Exclusiva para Menores de Edad (Ley 1098 de 2006 Arts. 44 y 47) -->
+            @if (isStudentSelected()) {
+              <div
+                class="rounded-2xl border-4 border-sky-400 bg-sky-50 p-4 text-slate-900 space-y-3"
+              >
+                <h3 class="text-sm font-black uppercase text-sky-950">
+                  🛡️ Datos de Grado y Acudiente Responsable (Obligatorio Ley 1098 de 2006)
+                </h3>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                  <div>
+                    <label for="reg-grado" class="block text-xs font-extrabold">Grado de Primaria</label>
+                    <select
+                      id="reg-grado"
+                      formControlName="gradoNivel"
+                      class="mt-1 w-full min-h-[46px] rounded-xl border-2 bg-white px-3 py-2 font-bold text-slate-900"
+                    >
+                      @for (g of gradosPrimaria; track g.id) {
+                        <option [value]="g.id">{{ g.label }}</option>
+                      }
+                    </select>
+                  </div>
+
+                  <div>
+                    <label for="reg-birth" class="block text-xs font-extrabold">Fecha de Nacimiento</label>
+                    <input
+                      id="reg-birth"
+                      type="date"
+                      formControlName="fechaNacimiento"
+                      class="mt-1 w-full min-h-[46px] rounded-xl border-2 bg-white px-3 py-2 font-bold text-slate-900"
+                    />
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  <div>
+                    <label for="reg-guardian-name" class="block text-xs font-extrabold">Nombre del Acudiente</label>
+                    <input
+                      id="reg-guardian-name"
+                      type="text"
+                      formControlName="nombreAcudiente"
+                      placeholder="Padre / Madre / Tutor"
+                      class="mt-1 w-full min-h-[46px] rounded-xl border-2 bg-white px-3 py-2 text-sm font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label for="reg-guardian-email" class="block text-xs font-extrabold">Correo del Acudiente</label>
+                    <input
+                      id="reg-guardian-email"
+                      type="email"
+                      formControlName="correoAcudiente"
+                      placeholder="acudiente@familia.co"
+                      class="mt-1 w-full min-h-[46px] rounded-xl border-2 bg-white px-3 py-2 text-sm font-semibold"
+                    />
+                  </div>
+
+                  <div>
+                    <label for="reg-guardian-phone" class="block text-xs font-extrabold">Teléfono Acudiente</label>
+                    <input
+                      id="reg-guardian-phone"
+                      type="tel"
+                      formControlName="telefonoAcudiente"
+                      placeholder="+57 300..."
+                      class="mt-1 w-full min-h-[46px] rounded-xl border-2 bg-white px-3 py-2 text-sm font-semibold"
+                    />
+                  </div>
+                </div>
+              </div>
+            }
+
+            <!-- Casilla de Consentimiento Informado Expreso (Ley 1581 de 2012 & Decreto 1377 de 2013) -->
+            <div class="flex items-start gap-3 rounded-2xl border-2 border-emerald-500 bg-emerald-50 p-4 text-slate-900">
+              <input
+                id="reg-consent"
+                type="checkbox"
+                formControlName="aceptaConsentimientoLey1581"
+                class="mt-1 h-6 w-6 rounded border-2 border-emerald-700 text-emerald-600 focus:ring-emerald-500"
+              />
+              <label for="reg-consent" class="text-xs font-bold leading-relaxed">
+                Autorizo de manera previa, expresa e informada el tratamiento de datos personales conforme a la
+                <strong>Ley Estatutaria 1581 de 2012</strong>, el <strong>Decreto 1377 de 2013</strong> y el
+                <strong>Art. 44/47 de la Ley 1098 de 2006</strong> exclusivamente para fines pedagógicos en SciKids LMS.
+              </label>
+            </div>
+
+            <button
+              type="submit"
+              [disabled]="isLoading()"
+              class="w-full min-h-[56px] rounded-2xl bg-emerald-600 px-6 py-3.5 text-lg font-black text-white shadow-lg transition hover:bg-emerald-700 focus:outline-none focus:ring-4 focus:ring-emerald-300 disabled:opacity-50"
+            >
+              {{ isLoading() ? 'Registrando y cifrando PII...' : '✅ Registrar Cuenta con Protección Habeas Data' }}
+            </button>
+          </form>
+        }
+      </section>
+    </div>
+  </div>
+</main>

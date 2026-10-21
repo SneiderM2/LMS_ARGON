@@ -25,14 +25,19 @@ import {
 import { InactivityService } from '../services/inactivity.service';
 
 export interface SilentRefreshResponse {
+  readonly usuarioId: string;
+  readonly username: string;
+  readonly email: string;
+  readonly nombreCompleto: string;
+  readonly rol: 'ADMINISTRADOR' | 'DOCENTE' | 'ALUMNO' | 'ACUDIENTE';
+  readonly codigoSeudonimo: string;
+  readonly consentimientoParentalVerificado: boolean;
   readonly accessToken: string;
-  readonly expiresAtUtc: string;
-  readonly role: string;
-  readonly pseudonymCode: string;
-  readonly parentalConsentVerified: boolean;
+  readonly accessTokenExpiresAtUtc: string;
+  readonly sessionFamilyId: string;
 }
 
-const AUTH_REFRESH_ENDPOINT = '/api/v1/auth/refresh';
+const AUTH_REFRESH_ENDPOINT = '/api/v1/auth/refresh-token';
 let isRefreshInProgress = false;
 const refreshedTokenSubject = new BehaviorSubject<string | null>(null);
 
@@ -86,6 +91,8 @@ function executeSecurePipeline(
 ): Observable<HttpEvent<unknown>> {
   const isIdentityEndpoint =
     req.url.includes('/api/v1/auth/login') ||
+    req.url.includes('/api/v1/auth/register') ||
+    req.url.includes('/api/v1/auth/captcha') ||
     req.url.includes('/api/v1/auth/refresh') ||
     req.url.includes('/api/v1/auth/logout');
 
@@ -132,7 +139,7 @@ function executeSecurePipeline(
         ) {
           inactivityService.triggerSecureLogout('FORBIDDEN_PARENTAL_CONSENT');
         } else {
-          void router.navigate(['/forbidden']);
+          void router.navigate(['/login'], { queryParams: { reason: 'FORBIDDEN' } });
         }
       }
 
@@ -181,7 +188,7 @@ function handle401SilentRefresh(
             throw new Error('No se recibió un nuevo Access Token durante el refresco silencioso.');
           }
 
-          inactivityService.setAccessToken(refreshResponse.accessToken);
+          inactivityService.setAuthenticatedSession(refreshResponse);
           refreshedTokenSubject.next(refreshResponse.accessToken);
 
           return next(

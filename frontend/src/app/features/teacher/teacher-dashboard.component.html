@@ -1,0 +1,559 @@
+<div class="min-h-screen bg-slate-50 text-slate-900">
+  <!-- Modal de Advertencia de Inactividad (InactivityService) -->
+  @if (inactivityService.isWarningVisible()) {
+    <div
+      class="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm"
+      role="alertdialog"
+      aria-modal="true"
+    >
+      <div class="w-full max-w-md rounded-3xl border-4 border-amber-400 bg-white p-6 text-center shadow-2xl">
+        <div class="text-4xl">⏳</div>
+        <h2 class="mt-2 text-xl font-black">Sesión Docente por Expirar</h2>
+        <p class="mt-2 text-sm font-medium text-slate-600">
+          Por seguridad de los datos escolares (Ley 1581 de 2012), cerraremos la sesión en:
+        </p>
+        <div class="my-4 text-4xl font-black text-amber-600">
+          {{ inactivityService.remainingSeconds() }}s
+        </div>
+        <div class="flex gap-3">
+          <button
+            type="button"
+            (click)="inactivityService.extendActiveSession()"
+            class="min-h-[48px] flex-1 rounded-2xl bg-emerald-600 px-4 py-2.5 font-extrabold text-white"
+          >
+            Mantener Sesión Activa
+          </button>
+          <button
+            type="button"
+            (click)="onLogout()"
+            class="min-h-[48px] flex-1 rounded-2xl border-2 border-rose-600 px-4 py-2.5 font-extrabold text-rose-700"
+          >
+            Cerrar Ahora
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- Barra de Navegación Superior Docente -->
+  <header class="border-b-2 border-slate-200 bg-white px-6 py-4 shadow-sm">
+    <div class="mx-auto flex max-w-7xl flex-col justify-between gap-4 md:flex-row md:items-center">
+      <div class="flex items-center gap-3">
+        <span class="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-600 text-2xl text-white shadow">
+          👩‍🏫
+        </span>
+        <div>
+          <h1 class="text-2xl font-black tracking-tight text-slate-900">
+            Panel Docente & Semáforo Escolar (SciKids LMS)
+          </h1>
+          <p class="text-xs font-semibold text-slate-600">
+            Aislamiento RLS por Curso Asignado • Cumplimiento Ley 1581 de 2012 y Ley 1098 de 2006
+          </p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          (click)="openModal('CREATE_COURSE')"
+          class="min-h-[46px] rounded-2xl bg-sky-600 px-4 py-2.5 text-sm font-extrabold text-white shadow hover:bg-sky-700"
+        >
+          ➕ Nuevo Curso
+        </button>
+
+        <button
+          type="button"
+          (click)="openModal('CREATE_TASK')"
+          class="min-h-[46px] rounded-2xl bg-indigo-600 px-4 py-2.5 text-sm font-extrabold text-white shadow hover:bg-indigo-700"
+        >
+          📝 Publicar Misión
+        </button>
+
+        <button
+          type="button"
+          (click)="openModal('ENROLL_STUDENT')"
+          class="min-h-[46px] rounded-2xl bg-emerald-600 px-4 py-2.5 text-sm font-extrabold text-white shadow hover:bg-emerald-700"
+        >
+          🎓 Matricular Alumno
+        </button>
+
+        <button
+          type="button"
+          (click)="onLogout()"
+          class="min-h-[46px] rounded-2xl border-2 border-rose-600 bg-rose-50 px-4 py-2.5 text-sm font-extrabold text-rose-800 hover:bg-rose-100"
+        >
+          🚪 Salir Seguro
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="mx-auto max-w-7xl px-6 py-8 space-y-8">
+    <!-- Banner de Notificación -->
+    @if (statusBanner()) {
+      <div
+        role="status"
+        class="flex items-center justify-between rounded-2xl border-2 p-4 font-bold shadow-sm"
+        [ngClass]="
+          statusBanner()!.type === 'SUCCESS'
+            ? 'border-emerald-500 bg-emerald-50 text-emerald-950'
+            : 'border-rose-500 bg-rose-50 text-rose-950'
+        "
+      >
+        <span>{{ statusBanner()!.text }}</span>
+        <button
+          type="button"
+          (click)="statusBanner.set(null)"
+          class="rounded-lg px-2 py-1 text-xs font-extrabold underline"
+        >
+          Cerrar
+        </button>
+      </div>
+    }
+
+    <!-- Selector de Cursos Asignados al Docente -->
+    <section aria-labelledby="courses-heading">
+      <h2 id="courses-heading" class="mb-4 text-xl font-black text-slate-900">
+        📚 Mis Cursos Asignados (Primaria 1° a 5°)
+      </h2>
+
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        @for (course of courses(); track course.cursoId) {
+          <button
+            type="button"
+            (click)="selectCourse(course.cursoId)"
+            class="flex flex-col justify-between rounded-3xl border-4 p-5 text-left transition shadow-sm hover:shadow-md focus:outline-none focus:ring-4 focus:ring-sky-300"
+            [ngClass]="
+              selectedCourseId() === course.cursoId
+                ? 'border-sky-600 bg-sky-50/70'
+                : 'border-slate-200 bg-white'
+            "
+          >
+            <div>
+              <div class="flex items-center justify-between">
+                <span class="rounded-xl bg-slate-900 px-3 py-1 text-xs font-black text-white">
+                  {{ course.codigoCurso }}
+                </span>
+                <span class="text-2xl" aria-hidden="true">{{ course.iconoEmoji }}</span>
+              </div>
+              <h3 class="mt-3 text-lg font-black text-slate-900">{{ course.nombre }}</h3>
+              <p class="mt-1 text-xs font-bold text-sky-800">
+                {{ course.gradoNombre }} • {{ course.areaConocimiento }}
+              </p>
+              <p class="mt-2 line-clamp-2 text-xs text-slate-600">{{ course.descripcion }}</p>
+            </div>
+
+            <div class="mt-4 flex items-center justify-between border-t border-slate-200 pt-3 text-xs font-extrabold">
+              <span>👦 {{ course.totalAlumnosInscritos }} alumnos</span>
+              <span>📋 {{ course.totalTareasActivas }} misiones</span>
+              @if (course.alumnosEnAlertaRoja > 0) {
+                <span class="rounded-lg bg-rose-100 px-2 py-0.5 text-rose-800">
+                  🔴 {{ course.alumnosEnAlertaRoja }} alerta
+                </span>
+              }
+            </div>
+          </button>
+        }
+      </div>
+    </section>
+
+    <!-- Tarjetas de Resumen del Semáforo Escolar Pedagógico -->
+    <section class="grid grid-cols-1 gap-4 sm:grid-cols-4" aria-label="Resumen de Semáforo Escolar">
+      <button
+        type="button"
+        (click)="setSemaforoFilter('TODOS')"
+        class="rounded-2xl border-2 p-4 text-left shadow-sm transition"
+        [ngClass]="
+          semaforoFilter() === 'TODOS'
+            ? 'border-slate-900 bg-slate-900 text-white'
+            : 'border-slate-200 bg-white text-slate-900'
+        "
+      >
+        <div class="text-xs font-extrabold uppercase opacity-80">Total Matriculados</div>
+        <div class="mt-1 text-3xl font-black">{{ semaforoStudents().length }}</div>
+        <div class="mt-1 text-xs font-semibold">Ver todos los alumnos</div>
+      </button>
+
+      <button
+        type="button"
+        (click)="setSemaforoFilter('VERDE')"
+        class="rounded-2xl border-2 border-emerald-500 bg-emerald-50 p-4 text-left text-emerald-950 shadow-sm transition"
+      >
+        <div class="text-xs font-extrabold uppercase">🟢 Semáforo Verde</div>
+        <div class="mt-1 text-3xl font-black">{{ totalVerde() }}</div>
+        <div class="mt-1 text-xs font-semibold">Cumplimiento >= 80% al día</div>
+      </button>
+
+      <button
+        type="button"
+        (click)="setSemaforoFilter('AMARILLO')"
+        class="rounded-2xl border-2 border-amber-500 bg-amber-50 p-4 text-left text-amber-950 shadow-sm transition"
+      >
+        <div class="text-xs font-extrabold uppercase">🟡 Semáforo Amarillo</div>
+        <div class="mt-1 text-3xl font-black">{{ totalAmarillo() }}</div>
+        <div class="mt-1 text-xs font-semibold">Alerta preventiva / refuerzo</div>
+      </button>
+
+      <button
+        type="button"
+        (click)="setSemaforoFilter('ROJO')"
+        class="rounded-2xl border-2 border-rose-600 bg-rose-50 p-4 text-left text-rose-950 shadow-sm transition"
+      >
+        <div class="text-xs font-extrabold uppercase">🔴 Semáforo Rojo</div>
+        <div class="mt-1 text-3xl font-black">{{ totalRojo() }}</div>
+        <div class="mt-1 text-xs font-semibold">Atención prioritaria + Acudiente</div>
+      </button>
+    </section>
+
+    <!-- Tabla de Seguimiento del Semáforo Escolar y Calificación -->
+    <section
+      class="overflow-hidden rounded-3xl border-2 border-slate-200 bg-white shadow-md"
+      aria-labelledby="semaforo-table-heading"
+    >
+      <div class="flex flex-col justify-between gap-2 border-b border-slate-200 p-6 sm:flex-row sm:items-center">
+        <div>
+          <h2 id="semaforo-table-heading" class="text-xl font-black">
+            🚦 Matriz de Semáforo Escolar y Calificaciones MEN
+          </h2>
+          <p class="text-xs font-semibold text-slate-600">
+            Curso activo: <strong>{{ selectedCourse()?.nombre || 'Seleccione un curso' }}</strong> • Seudonimización activa (Art. 47 Ley 1098)
+          </p>
+        </div>
+
+        <span class="rounded-xl bg-slate-100 px-3 py-1.5 text-xs font-extrabold text-slate-700">
+          Filtro actual: {{ semaforoFilter() }}
+        </span>
+      </div>
+
+      <div class="overflow-x-auto">
+        <table class="w-full text-left text-sm">
+          <thead class="bg-slate-100 text-xs font-extrabold uppercase text-slate-700">
+            <tr>
+              <th class="px-5 py-3.5">Estado Semáforo</th>
+              <th class="px-5 py-3.5">Seudónimo / Alumno</th>
+              <th class="px-5 py-3.5">Avance Misiones</th>
+              <th class="px-5 py-3.5">Promedio (0-5)</th>
+              <th class="px-5 py-3.5">Acudiente Legal (Ley 1098)</th>
+              <th class="px-5 py-3.5">Observación Pedagógica</th>
+              <th class="px-5 py-3.5 text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-slate-200 font-medium">
+            @for (student of filteredSemaforoStudents(); track student.alumnoId) {
+              <tr class="hover:bg-slate-50/80">
+                <td class="px-5 py-4">
+                  <span
+                    class="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-black"
+                    [ngClass]="{
+                      'bg-emerald-100 text-emerald-900 border border-emerald-400': student.colorSemaforo === 'VERDE',
+                      'bg-amber-100 text-amber-900 border border-amber-400': student.colorSemaforo === 'AMARILLO',
+                      'bg-rose-100 text-rose-900 border border-rose-500': student.colorSemaforo === 'ROJO'
+                    }"
+                  >
+                    @if (student.colorSemaforo === 'VERDE') { 🟢 VERDE }
+                    @if (student.colorSemaforo === 'AMARILLO') { 🟡 AMARILLO }
+                    @if (student.colorSemaforo === 'ROJO') { 🔴 ROJO }
+                  </span>
+                </td>
+
+                <td class="px-5 py-4">
+                  <div class="font-black text-slate-900">{{ student.nombreCompleto }}</div>
+                  <div class="text-xs font-bold text-sky-700">
+                    {{ student.codigoSeudonimo }} • {{ student.gradoNombre }}
+                  </div>
+                </td>
+
+                <td class="px-5 py-4">
+                  <div class="font-extrabold text-slate-900">
+                    {{ student.porcentajeCumplimiento }}% completado
+                  </div>
+                  <div class="text-xs text-slate-600">
+                    ✅ {{ student.tareasEntregadas }} entregadas • ⏳ {{ student.tareasPendientes }} pend. • ⚠️ {{ student.tareasVencidas }} vencidas
+                  </div>
+                </td>
+
+                <td class="px-5 py-4">
+                  <span class="rounded-xl bg-slate-900 px-3 py-1.5 text-sm font-black text-white">
+                    {{ student.promedioCurso.toFixed(1) }}
+                  </span>
+                </td>
+
+                <td class="px-5 py-4">
+                  <div class="font-bold text-slate-800">{{ student.nombreAcudiente }}</div>
+                  <div class="text-xs text-slate-500">{{ student.correoAcudiente }}</div>
+                  @if (student.requiereAtencionAcudiente) {
+                    <span class="mt-1 inline-block rounded bg-rose-100 px-2 py-0.5 text-[11px] font-extrabold text-rose-800">
+                      🔔 Notificar Acudiente
+                    </span>
+                  }
+                </td>
+
+                <td class="max-w-xs px-5 py-4 text-xs text-slate-600">
+                  {{ student.observacionDocente }}
+                </td>
+
+                <td class="px-5 py-4 text-right">
+                  <button
+                    type="button"
+                    (click)="openModal('GRADE_STUDENT', student)"
+                    class="min-h-[42px] rounded-xl bg-sky-600 px-3.5 py-2 text-xs font-extrabold text-white shadow hover:bg-sky-700"
+                  >
+                    ⭐ Calificar Entrega
+                  </button>
+                </td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 1: CREAR NUEVO CURSO                                            -->
+  <!-- ===================================================================== -->
+  @if (activeModal() === 'CREATE_COURSE') {
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4">
+      <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+        <h3 class="text-xl font-black">➕ Crear Nuevo Curso de Primaria</h3>
+        <form [formGroup]="createCourseForm" (ngSubmit)="onSubmitCreateCourse()" class="mt-4 space-y-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-extrabold">Código del Curso</label>
+              <input
+                type="text"
+                formControlName="codigoCurso"
+                placeholder="Ej: BIO-4P-2026"
+                class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-semibold"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold">Grado (1° a 5°)</label>
+              <select formControlName="gradoId" class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-bold">
+                <option [value]="1">1° de Primaria</option>
+                <option [value]="2">2° de Primaria</option>
+                <option [value]="3">3° de Primaria</option>
+                <option [value]="4">4° de Primaria</option>
+                <option [value]="5">5° de Primaria</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-extrabold">Nombre del Curso</label>
+            <input
+              type="text"
+              formControlName="nombre"
+              placeholder="Ej: Exploradores del Sistema Solar"
+              class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-semibold"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-extrabold">Descripción Pedagógica</label>
+            <textarea
+              rows="3"
+              formControlName="descripcion"
+              class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-semibold"
+            ></textarea>
+          </div>
+
+          <div class="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              (click)="closeModal()"
+              class="min-h-[44px] rounded-xl border-2 px-4 py-2 font-bold"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              [disabled]="isSaving()"
+              class="min-h-[44px] rounded-xl bg-sky-600 px-5 py-2 font-extrabold text-white"
+            >
+              Guardar Curso
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 2: PUBLICAR NUEVA MISIÓN / TAREA                                -->
+  <!-- ===================================================================== -->
+  @if (activeModal() === 'CREATE_TASK') {
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4">
+      <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+        <h3 class="text-xl font-black">📝 Publicar Nueva Misión Científica</h3>
+        <form [formGroup]="createTaskForm" (ngSubmit)="onSubmitCreateTask()" class="mt-4 space-y-4">
+          <div>
+            <label class="block text-xs font-extrabold">Título de la Misión</label>
+            <input
+              type="text"
+              formControlName="titulo"
+              placeholder="Ej: Experimento de Germinación de Semillas"
+              class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-semibold"
+            />
+          </div>
+
+          <div>
+            <label class="block text-xs font-extrabold">Instrucciones Paso a Paso para el Niño</label>
+            <textarea
+              rows="3"
+              formControlName="instruccionesPedagogicas"
+              class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-semibold"
+            ></textarea>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-extrabold">Puntos Estrella (Gamificación)</label>
+              <input
+                type="number"
+                formControlName="puntosRecompensa"
+                class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-bold"
+              />
+            </div>
+            <div>
+              <label class="block text-xs font-extrabold">Fecha Límite</label>
+              <input
+                type="date"
+                formControlName="fechaLimiteUtc"
+                class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-bold"
+              />
+            </div>
+          </div>
+
+          <div class="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              (click)="closeModal()"
+              class="min-h-[44px] rounded-xl border-2 px-4 py-2 font-bold"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              [disabled]="isSaving()"
+              class="min-h-[44px] rounded-xl bg-indigo-600 px-5 py-2 font-extrabold text-white"
+            >
+              Publicar Misión
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 3: MATRICULAR ALUMNO                                            -->
+  <!-- ===================================================================== -->
+  @if (activeModal() === 'ENROLL_STUDENT') {
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4">
+      <div class="w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl">
+        <h3 class="text-xl font-black">🎓 Matricular Alumno en el Curso</h3>
+        <p class="mt-1 text-xs font-semibold text-slate-600">
+          El backend verificará que el menor cuente con autorización activa bajo Ley 1581 de 2012.
+        </p>
+        <form [formGroup]="enrollStudentForm" (ngSubmit)="onSubmitEnrollStudent()" class="mt-4 space-y-4">
+          <div>
+            <label class="block text-xs font-extrabold">UUID del Alumno</label>
+            <input
+              type="text"
+              formControlName="alumnoId"
+              class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-mono text-sm font-bold"
+            />
+          </div>
+          <div class="flex justify-end gap-3">
+            <button
+              type="button"
+              (click)="closeModal()"
+              class="min-h-[44px] rounded-xl border-2 px-4 py-2 font-bold"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              [disabled]="isSaving()"
+              class="min-h-[44px] rounded-xl bg-emerald-600 px-5 py-2 font-extrabold text-white"
+            >
+              Confirmar Matrícula
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+
+  <!-- ===================================================================== -->
+  <!-- MODAL 4: CALIFICAR ENTREGA Y RECALCULAR SEMÁFORO ESCOLAR              -->
+  <!-- ===================================================================== -->
+  @if (activeModal() === 'GRADE_STUDENT' && selectedStudentForGrading()) {
+    <div class="fixed inset-0 z-40 flex items-center justify-center bg-slate-950/75 p-4">
+      <div class="w-full max-w-lg rounded-3xl bg-white p-6 shadow-2xl">
+        <h3 class="text-xl font-black">
+          ⭐ Calificar a {{ selectedStudentForGrading()!.nombreCompleto }}
+        </h3>
+        <p class="text-xs font-bold text-sky-700">
+          Seudónimo: {{ selectedStudentForGrading()!.codigoSeudonimo }}
+        </p>
+
+        <form [formGroup]="gradeSubmissionForm" (ngSubmit)="onSubmitGradeStudent()" class="mt-4 space-y-4">
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-extrabold">Calificación Numérica (0.0 a 5.0)</label>
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                max="5"
+                formControlName="calificacionNumerica"
+                class="mt-1 w-full rounded-xl border-2 px-3 py-2 text-lg font-black"
+              />
+            </div>
+
+            <div>
+              <label class="block text-xs font-extrabold">Escala Nacional MEN</label>
+              <select
+                formControlName="escalaCualitativaMen"
+                class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-extrabold"
+              >
+                <option value="SUPERIOR">SUPERIOR (4.6 - 5.0)</option>
+                <option value="ALTO">ALTO (4.0 - 4.5)</option>
+                <option value="BASICO">BÁSICO (3.0 - 3.9)</option>
+                <option value="BAJO">BAJO (0.0 - 2.9)</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-extrabold">Retroalimentación Pedagógica Motivadora</label>
+            <textarea
+              rows="3"
+              formControlName="retroalimentacionDocente"
+              class="mt-1 w-full rounded-xl border-2 px-3 py-2 font-semibold"
+            ></textarea>
+          </div>
+
+          <div class="flex justify-end gap-3 pt-2">
+            <button
+              type="button"
+              (click)="closeModal()"
+              class="min-h-[44px] rounded-xl border-2 px-4 py-2 font-bold"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              [disabled]="isSaving()"
+              class="min-h-[44px] rounded-xl bg-sky-600 px-5 py-2 font-extrabold text-white"
+            >
+              Guardar Nota y Actualizar Semáforo
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  }
+</div>
