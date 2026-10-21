@@ -31,19 +31,30 @@ public sealed class SecurityHeadersMiddleware
             // 3. HTTP Strict Transport Security (HSTS) - 2 años, subdominios y preload (TLS 1.3 forzado)
             headers["Strict-Transport-Security"] = "max-age=63072000; includeSubDomains; preload";
 
-            // 4. Content Security Policy (CSP) estricta para API y recursos de Supabase
-            headers["Content-Security-Policy"] =
-                "default-src 'none'; " +
-                "script-src 'self'; " +
-                "style-src 'self'; " +
-                "img-src 'self' data: https://*.supabase.co; " +
-                "media-src 'self' https://*.supabase.co; " +
-                "connect-src 'self' https://*.supabase.co; " +
-                "font-src 'self'; " +
-                "frame-ancestors 'none'; " +
-                "base-uri 'self'; " +
-                "form-action 'self'; " +
-                "upgrade-insecure-requests;";
+            // 4. Content Security Policy (CSP) estricta para API y compatible con visor local Swagger UI
+            if (context.Request.Path.StartsWithSegments("/swagger"))
+            {
+                headers["Content-Security-Policy"] =
+                    "default-src 'self'; " +
+                    "script-src 'self' 'unsafe-inline'; " +
+                    "style-src 'self' 'unsafe-inline'; " +
+                    "img-src 'self' data:; " +
+                    "frame-ancestors 'none';";
+            }
+            else
+            {
+                headers["Content-Security-Policy"] =
+                    "default-src 'none'; " +
+                    "script-src 'self'; " +
+                    "style-src 'self'; " +
+                    "img-src 'self' data: https://*.supabase.co; " +
+                    "media-src 'self' https://*.supabase.co; " +
+                    "connect-src 'self' https://*.supabase.co; " +
+                    "font-src 'self'; " +
+                    "frame-ancestors 'none'; " +
+                    "base-uri 'self'; " +
+                    "form-action 'self';";
+            }
 
             // 5. Políticas de aislamiento de origen y privacidad de referencia
             headers["Referrer-Policy"] = "strict-origin-when-cross-origin";

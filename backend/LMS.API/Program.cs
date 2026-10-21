@@ -14,23 +14,34 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using Microsoft.IdentityModel.Tokens;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Registro de LMSDbContext con Npgsql (PostgreSQL en Supabase)
-string connectionString = builder.Configuration.GetConnectionString("SupabasePostgres")
-    ?? throw new InvalidOperationException("No se encontró la cadena de conexión 'SupabasePostgres'.");
+// 1. Registro de LMSDbContext: usa Npgsql (Supabase PostgreSQL) cuando la cadena real está configurada,
+//    o activa automáticamente la base de datos local en memoria para ejecución inmediata de 1 clic.
+string? connectionString = builder.Configuration.GetConnectionString("SupabasePostgres");
+bool useLocalInMemoryDb = string.IsNullOrWhiteSpace(connectionString)
+    || connectionString.Contains("YOUR_PROJECT_REF", StringComparison.OrdinalIgnoreCase)
+    || connectionString.Contains("YOUR_SUPABASE_PASSWORD", StringComparison.OrdinalIgnoreCase);
 
 builder.Services.AddDbContext<LMSDbContext>(options =>
 {
-    options.UseNpgsql(connectionString, npgsqlOptions =>
+    if (useLocalInMemoryDb)
     {
-        npgsqlOptions.EnableRetryOnFailure(
-            maxRetryCount: 3,
-            maxRetryDelay: TimeSpan.FromSeconds(5),
-            errorCodesToAdd: null);
-    });
+        options.UseInMemoryDatabase("SciKidsLocalEnterpriseDb");
+    }
+    else
+    {
+        options.UseNpgsql(connectionString, npgsqlOptions =>
+        {
+            npgsqlOptions.EnableRetryOnFailure(
+                maxRetryCount: 3,
+                maxRetryDelay: TimeSpan.FromSeconds(5),
+                errorCodesToAdd: null);
+        });
+    }
 });
 
 // 2. Configuración y registro de servicios de seguridad (JWT, Magic Bytes, Habeas Data)
@@ -69,11 +80,11 @@ builder.Services.AddRateLimiter(options =>
 
         return RateLimitPartition.GetTokenBucketLimiter($"{ip}:{userId}", _ => new TokenBucketRateLimiterOptions
         {
-            TokenLimit = 40,
+            TokenLimit = 60,
             QueueProcessingOrder = QueueProcessingOrder.OldestFirst,
-            QueueLimit = 2,
+            QueueLimit = 4,
             ReplenishmentPeriod = TimeSpan.FromSeconds(10),
-            TokensPerPeriod = 15,
+            TokensPerPeriod = 25,
             AutoReplenishment = true
         });
     });
@@ -130,7 +141,7 @@ builder.Services.AddAuthorization();
 
 // 5. CORS estricto con credenciales habilitadas para cookies HttpOnly
 string[] allowedOrigins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>()
-    ?? new[] { "http://localhost:4200", "https://sneiderm2.github.io" };
+    ?? new[] { "http://localhost:4200", "https://localhost:4200", "https://sneiderm2.github.io" };
 
 builder.Services.AddCors(options =>
 {
@@ -149,28 +160,37 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
-// 6. Pipeline de Middlewares DevSecOps (Cabeceras -> Excepciones RFC 7807 -> HTTPS -> CORS -> Auth -> RateLimiting)
+// 6. Pipeline de Middlewares DevSecOps (Cabeceras -> Excepciones RFC 7807 -> Swagger -> CORS -> Auth -> RateLimiting)
 app.UseSciKidsSecurityHeaders();
 app.UseSciKidsGlobalExceptionHandler();
 
-if (app.Environment.IsDevelopment())
+app.UseSwagger();
+app.UseSwaggerUI(c =>
 {
-    app.UseSwagger();
-    app.UseSwaggerUI();
+    c.SwaggerEndpoint("/swagger/v1/swagger.json", "SciKids LMS Enterprise API v1");
+    c.RoutePrefix = "swagger";
+});
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
 }
 
-app.UseHttpsRedirection();
 app.UseCors("SciKidsSpaCors");
 app.UseAuthentication();
 app.UseRateLimiter();
 app.UseAuthorization();
 
+app.MapGet("/", () => Results.Redirect("/swagger"));
 app.MapControllers();
 
-// Inicialización y Seeding automático cuando hay conexión activa a base de datos
-if (app.Configuration.GetValue("RunDatabaseInitializerOnStartup", false))
+// 7. Inicialización y Seeding automático (Roles, Grados 1° a 5°, Usuarios Demo y Cursos)
+await DbInitializer.InitializeAndSeedAsync(app.Services);
+
+if (useLocalInMemoryDb)
 {
-    await DbInitializer.InitializeAndSeedAsync(app.Services);
+    app.Logger.LogInformation(
+        "MODO LOCAL 1-CLIC ACTIVO: Base de datos en memoria inicializada con Roles, Grados (1° a 5°) y cuentas semilla (mateo.explorador, profe.laura, admin.scikids).");
 }
 
 app.Run();
